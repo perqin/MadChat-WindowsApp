@@ -1,27 +1,26 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
+﻿using MadChat.ViewModels;
+using MadChat.Views;
+
+using System;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
+using Windows.ApplicationModel.Background;
+using Windows.Networking.Sockets;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
-using Windows.UI.Xaml.Data;
-using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 
-namespace MadChat
-{
+namespace MadChat {
     /// <summary>
     /// Provides application-specific behavior to supplement the default Application class.
     /// </summary>
     sealed partial class App : Application
     {
+        public static ContactsViewModel ContactsVM = new ContactsViewModel();
+        public static UserViewModel UserVM = new UserViewModel();
+        public static IBackgroundTaskRegistration Task = null;
+        public static StreamSocketListener TcpListener = null;
+
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
         /// executed, and as such is the logical equivalent of main() or WinMain().
@@ -31,8 +30,8 @@ namespace MadChat
             Microsoft.ApplicationInsights.WindowsAppInitializer.InitializeAsync(
                 Microsoft.ApplicationInsights.WindowsCollectors.Metadata |
                 Microsoft.ApplicationInsights.WindowsCollectors.Session);
-            this.InitializeComponent();
-            this.Suspending += OnSuspending;
+            InitializeComponent();
+            Suspending += OnSuspending;
         }
 
         /// <summary>
@@ -42,14 +41,6 @@ namespace MadChat
         /// <param name="e">Details about the launch request and process.</param>
         protected override void OnLaunched(LaunchActivatedEventArgs e)
         {
-
-#if DEBUG
-            if (System.Diagnostics.Debugger.IsAttached)
-            {
-                this.DebugSettings.EnableFrameRateCounter = true;
-            }
-#endif
-
             Frame rootFrame = Window.Current.Content as Frame;
 
             // Do not repeat app initialization when the Window already has content,
@@ -75,10 +66,65 @@ namespace MadChat
                 // When the navigation stack isn't restored navigate to the first page,
                 // configuring the new page by passing required information as a navigation
                 // parameter
-                rootFrame.Navigate(typeof(MainPage), e.Arguments);
+                rootFrame.Navigate(typeof(LoginPage), e.Arguments);
             }
             // Ensure the current window is active
             Window.Current.Activate();
+
+            registerSocketTask();
+        }
+
+        async void registerSocketTask() {
+            //var socketTaskBuilder = new BackgroundTaskBuilder();
+            //socketTaskBuilder.Name = "SocketActivityBackgroundTask";
+            //socketTaskBuilder.TaskEntryPoint = _backgroundTaskEntryPoint;
+            //var trigger = new SocketActivityTrigger();
+            //socketTaskBuilder.SetTrigger(trigger);
+            //task = socketTaskBuilder.Register();
+
+            var status = await BackgroundExecutionManager.RequestAccessAsync();
+            if (status == BackgroundAccessStatus.Unspecified || status == BackgroundAccessStatus.Denied) {
+                return;
+            }
+            //try {
+            foreach (var current in BackgroundTaskRegistration.AllTasks) {
+                if (current.Value.Name == "SocketActivityBackgroundTask") {
+                    //Task = current.Value;
+                    //break;
+                    current.Value.Unregister(true);
+                }
+            }
+            if (Task == null) {
+                var socketTaskBuilder = new BackgroundTaskBuilder();
+                socketTaskBuilder.Name = "SocketActivityBackgroundTask";
+                socketTaskBuilder.TaskEntryPoint = "MadChat.Core.SocketActivityBackgroundTask";
+                //var trigger = new SocketActivityTrigger();
+                var trigger = new TimeTrigger(15, false);
+                socketTaskBuilder.SetTrigger(trigger);
+                Task = socketTaskBuilder.Register();
+            }
+            //TcpListener = new StreamSocketListener();
+            //TcpListener.EnableTransferOwnership(Task.TaskId, SocketActivityConnectedStandbyAction.Wake);
+            //TcpListener.ConnectionReceived += TcpListener_ConnectionReceived;
+
+            //SocketActivityInformation socketInformation;
+            //if (SocketActivityInformation.AllSockets.TryGetValue(socketId, out socketInformation)) {
+            //    // Application can take ownership of the socket and make any socket operation
+            //    // For sample it is just transfering it back.
+            //    socket = socketInformation.StreamSocket;
+            //    socket.TransferOwnership(socketId);
+            //    socket = null;
+            //    rootPage.NotifyUser("Connected. You may close the application", NotifyType.StatusMessage);
+            //    TargetServerTextBox.IsEnabled = false;
+            //    ConnectButton.IsEnabled = false;
+            //}
+            //} catch (Exception exception) {
+            //rootPage.NotifyUser(exception.Message, NotifyType.ErrorMessage);
+            //}
+        }
+
+        private void TcpListener_ConnectionReceived(StreamSocketListener sender, StreamSocketListenerConnectionReceivedEventArgs args) {
+            //TODO
         }
 
         /// <summary>
